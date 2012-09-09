@@ -10,7 +10,8 @@ Marcel, International Joint Conference on Biometrics, 2011.
 If you use this package and/or its results, please cite the following
 publications:
 
-1. The original paper with the counter-measure explained in details::
+1. The original paper with the frame-differences and normalization technique
+   explained in details::
 
     @inproceedings{Anjos_IJCB_2011,
       author = {Anjos, Andr{\'{e}} and Marcel, S{\'{e}}bastien},
@@ -44,12 +45,11 @@ database <https://www.idiap.ch/dataset/printattack>`_, but has since evolved to
 work with the whole of the `the REPLAY-ATTACK database
 <https://www.idiap.ch/dataset/replayattack>`_, which is a super-set of the
 PRINT-ATTACK database. You are allowed to select protocols in each of the
-applications described in this manual. To generate the results for the paper,
-just select `print` as protocol option where necessary.
+applications described in this manual.
 
-The data used in the paper is publicly available and should be downloaded and
-installed **prior** to try using the programs described in this package. Visit
-for more information.
+The data used in these experiments is publicly available and should be
+downloaded and installed **prior** to try using the programs described in this
+package.
 
 Installation
 ------------
