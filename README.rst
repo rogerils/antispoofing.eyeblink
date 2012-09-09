@@ -164,9 +164,11 @@ Calculate Frame Differences
 
 The eye-blink detector calculates normalized frame differences like our face
 *versus* background motion detector at the `antispoofing.motion package
-<http://pypi.python.org/pypi/antispoofing.motion>`_, except it does it only for
-the eye region. In the first stage of the processing, we compute the eye region
-normalized frame differences for each input video. To do this, just execute::
+<http://pypi.python.org/pypi/antispoofing.motion>`_, except it does it for
+the eye region and face remainer (the part of the face that does not contain
+the eye region). In the first stage of the processing, we compute the eye
+and face remainder regions normalized frame differences for each input video.
+To do this, just execute::
 
   $ ./bin/framediff.py /root/of/database results/framediff
 
@@ -187,6 +189,29 @@ the command line for instructions.
 
   Which just prints the number of jobs it requires for the grid execution.
 
+Creating Final Score Files
+==========================
+
+To create the final score files, you will need to execute ``make_scores.py``,
+which contains a simple strategy for producing a single score per input frame
+in every video. The final score is calculated from the input eye and face
+remainder frame differences in the following way::
+
+  S = ratio(eye/face_rem) - 2 * running_average(ratio(eye/face_rem))
+
+To compute the scores ``S`` for every frame in every input video, do the
+following::
+
+  $ ./bin/make_scores.py results/framediff results/scores
+
+There are more options for the `framediff.py` script you can use (such as the
+sub-protocol selection). Note that, by default, all applications are tunned to
+work with the **whole** of the replay attack database. Just type `--help` at
+the command line for instructions.
+
+We don't provide a grid-ified version of this step because the job runs quite
+fast, even for the whole database.
+
 Merging Scores
 ==============
 
@@ -196,8 +221,26 @@ by combining this counter-measure scores for every video into a single file
 that can be fed to external analysis utilities such as our
 `antispoofing.evaluation <http://pypi.python.org/pypi/antispoofing.evaluation>`
 package, you should use the script ``merge_scores.py``. You will have to
-specify how many of the scores in every video you will want to average and the
-input directory containing the scores files that will be merged. 
+specify how many of the scores in every video you will want to consider and the
+input directory containing the scores files that will be merged.
+
+The merging happens by looking for the signal maxima in the given range of
+frames. So, if the input sequence available on the file looks like::
+
+  - 3.423
+  - 2.977
+  - 1.552
+    4.072
+    3.033
+
+The output of this script, for such a file, will be ``4.072``. You can
+implement yourself other merging strategies by looking at the original merging
+script and adapting it to your requirements. Here are some strategies on may
+consider:
+
+1. Count at least N eye-blinks
+2. Average maximums over a certain period of time
+3. Etc
 
 The output of the program consists of a single 5-column formatted file with the
 client identities and scores for **every video** in the input directory. A line
