@@ -54,7 +54,7 @@ def main():
 
   if args.support == 'hand+fixed': args.support = ('hand', 'fixed')
 
-  from antispoofing.motion.framediff import eval_eyes_differences
+  from antispoofing.motion.framediff import eval_eyes_differences, eval_face_reminder_differences
   from antispoofing.faceloc import read_face, expand_detections
 
   db = Database()
@@ -99,14 +99,15 @@ def main():
     vin = input.load() # load all in one shot.
     prev = bob.ip.rgb_to_gray(vin[0,:,:,:])
     curr = numpy.empty_like(prev)
-    data = [0] #accounts for the first frame (no diff. yet)
+    data = [(0.,0.)] #accounts for the first frame (no diff. yet)
 
     for k in range(1, vin.shape[0]):
       sys.stdout.write('.')
       sys.stdout.flush()
       bob.ip.rgb_to_gray(vin[k,:,:,:], curr)
 
-      data.append(eval_eyes_differences(prev, curr, locations[k]))
+      data.append((eval_eyes_differences(prev, curr, locations[k]),
+          eval_face_reminder_differences(prev, curr, locations[k])))
 
       # swap buffers: curr <=> prev
       tmp = prev
