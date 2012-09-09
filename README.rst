@@ -225,7 +225,8 @@ specify how many of the scores in every video you will want to consider and the
 input directory containing the scores files that will be merged.
 
 The merging happens by looking for the signal maxima in the given range of
-frames. So, if the input sequence available on the file looks like::
+frames (normally skipping the first N frames). So, if the input sequence
+available on the file looks like::
 
   - 3.423
   - 2.977
