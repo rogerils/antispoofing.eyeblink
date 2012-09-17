@@ -212,36 +212,20 @@ the command line for instructions.
 We don't provide a grid-ified version of this step because the job runs quite
 fast, even for the whole database.
 
-Merging Scores
-==============
+Merging Scores - Counting Eye-Blinks
+====================================
 
 If you wish to create a single `5-column format file
 <http://www.idiap.ch/software/bob/docs/nightlies/last/bob/sphinx/html/measure/index.html?highlight=five_col#bob.measure.load.five_column>`_
 by combining this counter-measure scores for every video into a single file
 that can be fed to external analysis utilities such as our
 `antispoofing.evaluation <http://pypi.python.org/pypi/antispoofing.evaluation>`
-package, you should use the script ``merge_scores.py``. You will have to
-specify how many of the scores in every video you will want to consider and the
-input directory containing the scores files that will be merged.
-
-The merging happens by looking for the signal maxima in the given range of
-frames (normally skipping the first N frames). So, if the input sequence
-available on the file looks like::
-
-  - 3.423
-  - 2.977
-  - 1.552
-    4.072
-    3.033
-
-The output of this script, for such a file, will be ``4.072``. You can
-implement yourself other merging strategies by looking at the original merging
-script and adapting it to your requirements. Here are some strategies on may
-consider:
-
-1. Count at least N eye-blinks
-2. Average maximums over a certain period of time
-3. Etc
+package, you should use the script ``merge_scores.py``. The merged scores
+represent the number of eye-blinks computed for each video sequence. You will
+have to specify how many of the scores in every video you will want to consider
+and the input directory containing the scores files that will be merged (by
+default, the procedure considers only the first 220 frames, which is some sort
+of *common denominator* between real-access and attack video number of frames).
 
 The output of the program consists of a single 5-column formatted file with the
 client identities and scores for **every video** in the input directory. A line
@@ -250,13 +234,12 @@ in the output file corresponds to a video from the database.
 You run this program on the output of ``make_scores.py``. So, it should look
 like this if you followed the previous example::
 
-  $ ./bin/merge_scores.py scores/train motion-train.txt
-  $ ./bin/merge_scores.py scores/devel motion-devel.txt
-  $ ./bin/merge_scores.py socres/test motion-test.txt
+  $ ./bin/merge_scores.py results/scores results
 
-The above commandline examples will generate 3 files containing the training,
-development and test scores, accumulated over each video in the respective
-subsets, for input scores in the given input directory.
+The above commandline example will generate 3 text files on the ``results``
+directory containing the training, development and test scores, accumulated
+over each video in the respective subsets. You can use other options to limit
+the number of outputs in each file such as the protocol or support to use.
 
 Problems
 --------

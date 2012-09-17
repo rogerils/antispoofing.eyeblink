@@ -36,11 +36,14 @@ def main():
   parser.add_argument('-s', '--support', metavar='SUPPORT', type=str, 
       default='hand+fixed', dest='support', choices=supports, help="If you would like to select a specific support to be used, use this option (one of '%s'; defaults to '%%(default)s')" % '|'.join(sorted(supports))) 
 
-  parser.add_argument('-n', '--maximum-over', metavar='INT', type=int,
+  parser.add_argument('-n', '--number-of-scores', metavar='INT', type=int,
       default=220, dest='end', help="Number of scores to merge from every file (defaults to %(default)s)")
 
-  parser.add_argument('-S', '--skip-first', metavar='INT', type=int,
-      default=5, dest='skip', help="Number of frames to skip from the start (defaults to %(default)s)")
+  parser.add_argument('-S', '--skip-frames', metavar='INT', type=int,
+      default=5, dest='skip', help="Number of frames to skip once an eye-blink has been detected (defaults to %(default)s)")
+
+  parser.add_argument('-T', '--threshold-ratio', metavar='FLOAT', type=float,
+      default=0.5, dest='thres_ratio', help="Ratio between the maximum score average and the score average used to calculate the blink detection threshold on (defaults to %(default)s)")
 
   parser.add_argument('-v', '--verbose', action='store_true', dest='verbose',
       default=False, help='Increases this script verbosity')
@@ -58,7 +61,66 @@ def main():
 
   db = Database()
 
-  def write_file(group):
+  def eval_blink_threshold():
+    """Evaluates the blink threshold using the training set/photo protocol"""
+
+    if args.verbose:
+      print "Evaluating blink threshold using 'train/photo/real-access' group..."
+    
+    avg = []
+    max = []
+    
+    data = db.files(protocol='photo', groups='train', cls='real')
+
+    for key, value in data.iteritems():
+      fname = os.path.join(args.inputdir, value + '.hdf5')
+      scores = bob.io.load(fname)
+      avg.append(numpy.mean(scores))
+      max.append(numpy.max(scores))
+
+    avg = numpy.mean(avg)
+    max = numpy.mean(max)
+
+    # half-way between the average and the maximum
+    retval = args.thres_ratio*(max - avg) + avg
+
+    if args.verbose:
+      print "Blink threshold set to %.5e" % retval
+
+    return retval
+
+  def count_blinks(scores, threshold, skip_frames):
+    """Tells the client has blinked
+    
+    Keyword arguments
+
+    scores
+      The score set to be analyzed
+
+    threshold
+      The threshold to be used for checking blinks
+
+    skip_frames
+      How many frames to skip before start eye-blink detection again (after an
+      eye-blink has been successfuly detected). This is required to avoid the
+      method to falsely detect positives following a successful detection.
+    """
+
+    detected = 0
+    skip = skip_frames #start by skipping the initial frames
+
+    for score in scores:
+      if skip:
+        skip -= 1
+        continue
+
+      if score >= threshold:
+        detected += 1
+        skip = skip_frames
+
+    return detected
+
+  def write_file(group, threshold):
 
     if args.verbose:
       print "Processing '%s' group..." % group
@@ -80,12 +142,13 @@ def main():
         print "Processing file %s [%d/%d]..." % (fname, counter, total)
 
       arr = bob.io.load(fname)
-      avg = numpy.max(arr[args.skip:args.end])
+
+      nb = count_blinks(arr[:args.end], threshold, skip_frames=args.skip)
       
       # finds the client id
       client_id = int([k for k in os.path.basename(value).split('_') if k.find('client') == 0][0].replace('client', '').lstrip('0'))
 
-      out.write('%d %d %d %s %.5e\n' % (client_id, client_id, client_id, value, avg))
+      out.write('%d %d %d %s %d\n' % (client_id, client_id, client_id, value, nb))
 
     for key, value in attacks.iteritems():
       counter += 1
@@ -95,15 +158,16 @@ def main():
         print "Processing file %s [%d/%d]..." % (fname, counter, total)
 
       arr = bob.io.load(fname)
-      avg = numpy.max(arr[args.skip:args.end])
+      nb = count_blinks(arr[:args.end], threshold, skip_frames=args.skip)
       
       # finds the client id
       client_id = int([k for k in os.path.basename(value).split('_') if k.find('client') == 0][0].replace('client', '').lstrip('0'))
 
-      out.write('%d %d attack %s %.5e\n' % (client_id, client_id, value, avg))
+      out.write('%d %d attack %s %d\n' % (client_id, client_id, value, nb))
 
     out.close()
 
-  write_file('train')
-  write_file('devel')
-  write_file('test')
+  threshold = eval_blink_threshold()
+  write_file('train', threshold)
+  write_file('devel', threshold)
+  write_file('test', threshold)
