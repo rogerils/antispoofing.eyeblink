@@ -10,3 +10,6 @@ parts
 src
 develop-eggs
 dist
+database
+framediff
+annotations
