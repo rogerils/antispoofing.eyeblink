@@ -18,16 +18,19 @@ def main():
   import numpy
   from xbob.db.replay import Database
 
-  protocols = Database().protocols()
+  protocols = [k.name for k in Database().protos()]
 
   basedir = os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0])))
   INPUTDIR = os.path.join(basedir, 'database')
+  ANNOTATIONS = os.path.join(basedir, 'annotations')
   OUTPUTDIR = os.path.join(basedir, 'framediff')
 
   parser = argparse.ArgumentParser(description=__doc__,
       formatter_class=argparse.RawDescriptionHelpFormatter)
   parser.add_argument('inputdir', metavar='DIR', type=str, default=INPUTDIR,
       nargs='?', help='Base directory containing the videos to be treated by this procedure (defaults to "%(default)s")')
+  parser.add_argument('annotations', metavar='DIR', type=str,
+      default=ANNOTATIONS, nargs='?', help='Base directory containing the (flandmark) annotations to be treated by this procedure (defaults to "%(default)s")')
   parser.add_argument('outputdir', metavar='DIR', type=str, default=OUTPUTDIR,
       nargs='?', help='Base output directory for every file created by this procedure defaults to "%(default)s")')
   parser.add_argument('-p', '--protocol', metavar='PROTOCOL', type=str,
@@ -54,8 +57,7 @@ def main():
 
   if args.support == 'hand+fixed': args.support = ('hand', 'fixed')
 
-  from antispoofing.motion.framediff import eval_eyes_differences, eval_face_reminder_differences
-  from antispoofing.faceloc import read_face, expand_detections
+  from .. import utils 
 
   db = Database()
 
@@ -76,11 +78,10 @@ def main():
 
   for counter, obj in enumerate(process):
 
-    input = bob.io.VideoReader(obj.videofile(args.inputdir))
-
-    # loads the face locations
-    locations = read_face(obj.facefile(args.inputdir))
-    locations = expand_detections(locations, input.number_of_frames)
+    filename = str(obj.videofile(args.inputdir))
+    input = bob.io.VideoReader(filename)
+    annotations = utils.flandmark_load_annotations(obj, args.annotations,
+        verbose=True)
 
     sys.stdout.write("Processing file %s (%d frames) [%d/%d]..." % (filename,
       input.number_of_frames, counter+1, len(process)))
@@ -89,24 +90,23 @@ def main():
     vin = input.load() # load all in one shot.
     prev = bob.ip.rgb_to_gray(vin[0,:,:,:])
     curr = numpy.empty_like(prev)
-    data = [(0.,0.)] #accounts for the first frame (no diff. yet)
+    data = numpy.zeros((input.number_of_frames, 2), dtype='float64')
 
     for k in range(1, vin.shape[0]):
       sys.stdout.write('.')
       sys.stdout.flush()
       bob.ip.rgb_to_gray(vin[k,:,:,:], curr)
 
-      data.append((eval_eyes_differences(prev, curr, locations[k]),
-          eval_face_reminder_differences(prev, curr, locations[k])))
+      use_annotation = annotations[k] if annotations.has_key(k) else None
+      data[k][0] = utils.eval_eyes_difference(prev, curr, use_annotation)
+      data[k][1] = utils.eval_face_remainder_difference(prev, curr, use_annotation)
 
       # swap buffers: curr <=> prev
       tmp = prev
       prev = curr
       curr = tmp
 
-    # saves the output
-    arr = numpy.array(data, dtype='float64')
-    obj.save(arr, directory=args.outputdir, extension='.hdf5')
+    obj.save(data, directory=args.outputdir, extension='.hdf5')
 
     sys.stdout.write('\n')
     sys.stdout.flush()
