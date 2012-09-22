@@ -181,9 +181,9 @@ the command line for instructions.
 
   To parallelize this job, do the following::
 
-    $ ./bin/jman submit --array=1200 ./bin/framediff.py /root/of/database results/framediff --grid
+    $ ./bin/jman submit --array=1300 ./bin/framediff.py /root/of/database results/framediff --grid
 
-  The `magic` number of `1200` entries can be found by executing::
+  The `magic` number of `1300` entries can be found by executing::
 
     $ ./bin/framediff.py --grid-count
 
@@ -202,7 +202,7 @@ remainder frame differences in the following way::
 To compute the scores ``S`` for every frame in every input video, do the
 following::
 
-  $ ./bin/make_scores.py results/framediff results/scores
+  $ ./bin/make_scores.py --verbose results/framediff results/scores
 
 There are more options for the `framediff.py` script you can use (such as the
 sub-protocol selection). Note that, by default, all applications are tunned to
@@ -234,7 +234,7 @@ in the output file corresponds to a video from the database.
 You run this program on the output of ``make_scores.py``. So, it should look
 like this if you followed the previous example::
 
-  $ ./bin/merge_scores.py results/scores results
+  $ ./bin/merge_scores.py --verbose results/scores results
 
 The above commandline example will generate 3 text files on the ``results``
 directory containing the training, development and test scores, accumulated
