@@ -31,7 +31,6 @@ setup(
       "setuptools",
       "bob >= 1.1.0a0",
       "xbob.db.replay",
-      "antispoofing.motion",
     ],
 
     entry_points={
@@ -40,6 +39,7 @@ setup(
         'framediff.py = antispoofing.eyeblink.script.framediff:main',
         'make_scores.py = antispoofing.eyeblink.script.make_scores:main',
         'merge_scores.py = antispoofing.eyeblink.script.merge_scores:main',
+        'make_movie.py = antispoofing.eyeblink.script.make_movie:main',
         ],
 
       },
