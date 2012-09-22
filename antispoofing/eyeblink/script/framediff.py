@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 # vim: set fileencoding=utf-8 :
 # Andre Anjos <andre.anjos@idiap.ch>
-# Mon 02 Aug 2010 11:31:31 CEST 
+# Mon 02 Aug 2010 11:31:31 CEST
 
 """Calculates the normalized frame differences for eye regions, for all videos
 of the REPLAY-ATTACK database. A basic variant of this technique is described
 on the paper: Counter-Measures to Photo Attacks in Face Recognition: a public
-database and a baseline, Anjos & Marcel, IJCB'11.  
+database and a baseline, Anjos & Marcel, IJCB'11.
 """
 
 import os, sys
 import argparse
 
 def main():
-  
+
   import bob
   import numpy
   from xbob.db.replay import Database
@@ -59,41 +59,31 @@ def main():
 
   db = Database()
 
-  process = db.files(directory=args.inputdir, extension='.mov', 
-      protocol=args.protocol, support=args.support)
+  process = db.objects(protocol=args.protocol, support=args.support,
+      cls=('real', 'attack', 'enroll'))
 
   if args.grid_count:
     print len(process)
     sys.exit(0)
- 
+
   # if we are on a grid environment, just find what I have to process.
   if args.grid:
     pos = int(os.environ['SGE_TASK_ID']) - 1
-    ordered_keys = sorted(process.keys())
-    if pos >= len(ordered_keys):
+    if pos >= len(process):
       raise RuntimeError, "Grid request for job %d on a setup with %d jobs" % \
-          (pos, len(ordered_keys))
-    key = ordered_keys[pos] # gets the right key
-    process = {key: process[key]}
+          (pos, len(process))
+    process = [process[key]]
 
-  # where to find the face bounding boxes
-  faceloc_dir = os.path.join(args.inputdir, 'face-locations')
+  for counter, obj in enumerate(process):
 
-  counter = 0
-  for key, filename in process.items():
-    counter += 1
- 
-    filename = os.path.expanduser(filename)
-
-    input = bob.io.VideoReader(filename)
+    input = bob.io.VideoReader(obj.videofile(args.inputdir))
 
     # loads the face locations
-    flocfile = os.path.expanduser(db.paths([key], faceloc_dir, '.face')[0])
-    locations = read_face(flocfile)
+    locations = read_face(obj.facefile(args.inputdir))
     locations = expand_detections(locations, input.number_of_frames)
 
     sys.stdout.write("Processing file %s (%d frames) [%d/%d]..." % (filename,
-      input.number_of_frames, counter, len(process)))
+      input.number_of_frames, counter+1, len(process)))
 
     # start the work here...
     vin = input.load() # load all in one shot.
@@ -116,8 +106,8 @@ def main():
 
     # saves the output
     arr = numpy.array(data, dtype='float64')
-    db.save_one(key, arr, directory=args.outputdir, extension='.hdf5')
-    
+    obj.save(arr, directory=args.outputdir, extension='.hdf5')
+
     sys.stdout.write('\n')
     sys.stdout.flush()
 
