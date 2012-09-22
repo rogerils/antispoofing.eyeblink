@@ -17,11 +17,7 @@ def rmean(arr):
   """Calculates the running mean in a 1D numpy array"""
   return numpy.array([numpy.mean(arr[:(k+1)]) for k in range(len(arr))])
 
-def rmax(arr):
-  """Calculates the running maxima in a 1D numpy array"""
-  return numpy.array([arr[:(k+1)].max() for k in range(len(arr))])
-
-def score(data):
+def score(data, average):
   '''Calculates the score in any given input frame.
   
   S = ratio(eye/face_rem) - 2 * running_average(ratio(eye/face_rem))
@@ -33,7 +29,8 @@ def score(data):
     return nparr
 
   norm = replace_nan(data[:,0]/data[:,1])
-  return norm - (2 * rmean(norm))
+  #return norm - (2 * rmean(norm))
+  return norm - average
 
 def main():
   """Main method"""
@@ -75,8 +72,25 @@ def main():
 
   db = Database()
 
+  # evaluates averages:
+  averages = {}
+  for client in db.clients():
+    data = db.files(directory=args.inputdir, cls='enroll', clients=client,
+        extension='.hdf5')
+
+    partial = []
+    for key, value in data.iteritems():
+      scores = bob.io.load(value)
+      partial.append(numpy.mean(scores))
+    averages[client] = numpy.mean(partial)
+    if args.verbose:
+      sys.stdout.write('Average for client %d is %.5e\n' % (client,
+        averages[client]))
+      sys.stdout.flush()
+
   process = db.files(args.inputdir, extension='.hdf5', 
-      protocol=args.protocol, support=args.support)
+      protocol=args.protocol, support=args.support,
+      cls=('real', 'attack', 'enroll'))
 
   counter = 0
   for key, filename in process.items():
@@ -88,7 +102,10 @@ def main():
 
     input = bob.io.load(filename)
 
-    db.save_one(key, score(input), directory=args.outputdir, extension='.hdf5')
+    info = db.info((key,))[0]
+
+    db.save_one(key, score(input, averages[info['client']]), 
+        directory=args.outputdir, extension='.hdf5')
 
     if args.verbose:
       sys.stdout.write('Saving results to "%s"...\n' % args.outputdir)

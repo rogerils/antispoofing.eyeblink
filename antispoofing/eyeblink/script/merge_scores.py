@@ -62,32 +62,35 @@ def main():
   db = Database()
 
   def eval_blink_threshold():
-    """Evaluates the blink threshold using the training set/photo protocol"""
+    """Evaluates the blink threshold using enrollment data for each client"""
 
-    if args.verbose:
-      print "Evaluating blink threshold using 'train/photo/real-access' group..."
-    
-    avg = []
-    max = []
-    
-    data = db.files(protocol='photo', groups='train', cls='real')
+    client_models = {}
 
-    for key, value in data.iteritems():
-      fname = os.path.join(args.inputdir, value + '.hdf5')
-      scores = bob.io.load(fname)
-      avg.append(numpy.mean(scores))
-      max.append(numpy.max(scores))
+    for client in db.clients():
+      avg = []
+      max = []
+      
+      data = db.files(directory=args.inputdir, cls='enroll', clients=client,
+          extension='.hdf5')
 
-    avg = numpy.mean(avg)
-    max = numpy.mean(max)
+      for key, value in data.iteritems():
+        scores = bob.io.load(value)
+        avg.append(numpy.mean(scores))
+        max.append(numpy.max(scores))
 
-    # half-way between the average and the maximum
-    retval = args.thres_ratio*(max - avg) + avg
+      avg = numpy.mean(avg)
+      max = numpy.mean(max)
 
-    if args.verbose:
-      print "Blink threshold set to %.5e" % retval
+      # user configurable ratio between the average and the maximum
+      client_models[client] = args.thres_ratio*(max - avg) + avg
 
-    return retval
+      if args.verbose:
+        print "Blink threshold for client %d set to %.5e" % \
+            (client, client_models[client])
+        print "  * Average = %.5e" % avg
+        print "  * Maximum = %.5e" % max
+
+    return client_models
 
   def count_blinks(scores, threshold, skip_frames):
     """Tells the client has blinked
@@ -141,14 +144,14 @@ def main():
       if args.verbose: 
         print "Processing file %s [%d/%d]..." % (fname, counter, total)
 
+      client = db.info((key,))[0]['client']
+
       arr = bob.io.load(fname)
 
-      nb = count_blinks(arr[:args.end], threshold, skip_frames=args.skip)
+      nb = count_blinks(arr[:args.end], threshold[client], 
+          skip_frames=args.skip)
       
-      # finds the client id
-      client_id = int([k for k in os.path.basename(value).split('_') if k.find('client') == 0][0].replace('client', '').lstrip('0'))
-
-      out.write('%d %d %d %s %d\n' % (client_id, client_id, client_id, value, nb))
+      out.write('%d %d %d %s %d\n' % (client, client, client, value, nb))
 
     for key, value in attacks.iteritems():
       counter += 1
@@ -157,13 +160,13 @@ def main():
       if args.verbose: 
         print "Processing file %s [%d/%d]..." % (fname, counter, total)
 
-      arr = bob.io.load(fname)
-      nb = count_blinks(arr[:args.end], threshold, skip_frames=args.skip)
-      
-      # finds the client id
-      client_id = int([k for k in os.path.basename(value).split('_') if k.find('client') == 0][0].replace('client', '').lstrip('0'))
+      client = db.info((key,))[0]['client']
 
-      out.write('%d %d attack %s %d\n' % (client_id, client_id, value, nb))
+      arr = bob.io.load(fname)
+      nb = count_blinks(arr[:args.end], threshold[client], 
+          skip_frames=args.skip)
+      
+      out.write('%d %d attack %s %d\n' % (client, client, value, nb))
 
     out.close()
 
