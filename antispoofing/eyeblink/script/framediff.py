@@ -36,6 +36,8 @@ def main():
   parser.add_argument('-p', '--protocol', metavar='PROTOCOL', type=str,
       default='grandtest', choices=protocols, dest="protocol",
       help='The protocol type may be specified instead of the the id switch to subselect a smaller number of files to operate on (one of "%s"; defaults to "%%(default)s")' % '|'.join(sorted(protocols)))
+  parser.add_argument('-M', '--maximum-displacement', metavar='FLOAT',
+      type=float, dest="max_displacement", default=0.2, help="Maximum displacement (w.r.t. to the eye width) between eye-centers to consider the eye for calculating eye-differences")
 
   supports = ('fixed', 'hand', 'hand+fixed')
 
@@ -70,10 +72,10 @@ def main():
 
   # if we are on a grid environment, just find what I have to process.
   if args.grid:
-    pos = int(os.environ['SGE_TASK_ID']) - 1
-    if pos >= len(process):
+    key = int(os.environ['SGE_TASK_ID']) - 1
+    if key >= len(process):
       raise RuntimeError, "Grid request for job %d on a setup with %d jobs" % \
-          (pos, len(process))
+          (key, len(process))
     process = [process[key]]
 
   for counter, obj in enumerate(process):
@@ -87,26 +89,40 @@ def main():
       input.number_of_frames, counter+1, len(process)))
 
     # start the work here...
-    vin = input.load() # load all in one shot.
-    prev = bob.ip.rgb_to_gray(vin[0,:,:,:])
-    curr = numpy.empty_like(prev)
-    data = numpy.zeros((input.number_of_frames, 2), dtype='float64')
+    frames = [bob.ip.rgb_to_gray(k) for k in input]
+    utils.light_normalize_tantriggs(frames, annotations, 0, len(frames))
+    #utils.light_normalize_histogram(frames, annotations, 0, len(frames))
+    features = numpy.zeros((input.number_of_frames, 2), dtype='float64')
 
-    for k in range(1, vin.shape[0]):
-      sys.stdout.write('.')
+    for k in range(1, len(frames)):
+
+      curr_annot = annotations[k] if annotations.has_key(k) else None
+      prev_annot = annotations[k-1] if annotations.has_key(k-1) else None
+      use_annotation = (prev_annot, curr_annot)
+
+      use_frames = (frames[k-1], frames[k])
+
+      # maximum of 5 pixel displacement acceptable
+      eye_diff, eye_pixels = utils.eval_eyes_difference(use_frames, 
+          use_annotation, args.max_displacement)
+      facerem_diff, facerem_pixels = utils.eval_face_remainder_difference(
+          use_frames, use_annotation, eye_diff, eye_pixels)
+
+      if eye_pixels != 0: 
+        features[k][0] = eye_diff/float(eye_pixels)
+      else: 
+        features[k][0] = 0.
+
+      if facerem_pixels != 0: 
+        features[k][1] = facerem_diff/float(facerem_pixels)
+      else: 
+        features[k][1] = 1.
+
+      if eye_diff == 0: sys.stdout.write('x')
+      else: sys.stdout.write('.')
       sys.stdout.flush()
-      bob.ip.rgb_to_gray(vin[k,:,:,:], curr)
 
-      use_annotation = annotations[k] if annotations.has_key(k) else None
-      data[k][0] = utils.eval_eyes_difference(prev, curr, use_annotation)
-      data[k][1] = utils.eval_face_remainder_difference(prev, curr, use_annotation)
-
-      # swap buffers: curr <=> prev
-      tmp = prev
-      prev = curr
-      curr = tmp
-
-    obj.save(data, directory=args.outputdir, extension='.hdf5')
+    obj.save(features, directory=args.outputdir, extension='.hdf5')
 
     sys.stdout.write('\n')
     sys.stdout.flush()
