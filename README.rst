@@ -51,6 +51,13 @@ The data used in these experiments is publicly available and should be
 downloaded and installed **prior** to try using the programs described in this
 package.
 
+Annotations
+-----------
+
+Annotations for this work were generated with the free-software package called
+`flandmark <http://cmp.felk.cvut.cz/~uricamic/flandmark/>`. Please cite that
+work as well if you use the results of this package on your own publication.
+
 Installation
 ------------
 
@@ -177,6 +184,14 @@ sub-protocol selection). Note that, by default, all applications are tunned to
 work with the **whole** of the replay attack database. Just type `--help` at
 the command line for instructions.
 
+There is one parameter in special you may need tunning on the above script,
+which relates to the ``--maximum-displacement`` option. This option controls
+the percentage in eye-center movement in which the method still considers the
+current detection is valid, w.r.t. the previous frame. If the eye-center
+positions between the current and previous frame move more than the specified
+ratio of the eye-width, then the detection is considered invalid and is
+discarded.
+
 .. note::
 
   To parallelize this job, do the following::
@@ -197,7 +212,20 @@ which contains a simple strategy for producing a single score per input frame
 in every video. The final score is calculated from the input eye and face
 remainder frame differences in the following way::
 
-  S = ratio(eye/face_rem) - 2 * running_average(ratio(eye/face_rem))
+  S = ratio(eye/face_rem) - running_average(ratio(eye/face_rem))
+
+  The final score is set to S, unless any of the following conditions are met:
+
+  1
+    S < running_std_deviation(ratio(...))
+
+  2
+    eye == 0
+
+  3
+    S < running_average(ratio(...))
+
+  In these cases S is replaced by the output of running_average(ratio(...)).
 
 To compute the scores ``S`` for every frame in every input video, do the
 following::
@@ -240,6 +268,32 @@ The above commandline example will generate 3 text files on the ``results``
 directory containing the training, development and test scores, accumulated
 over each video in the respective subsets. You can use other options to limit
 the number of outputs in each file such as the protocol or support to use.
+
+There are two main options you may need to tweak on this program:
+``--skip-frames`` and ``--threshold-ratio``. The first one, ``--skip-frames``,
+determines how many frames to skip between eye-blinks, to avoid multiple
+eye-blink detections on a single user blink (defaults to ``10``). The other
+parameter defines how many standard-deviations from the running mean, a given
+signal peak should be considered as originating from an eye-blink. It is set by
+default to ``3.0``.
+
+Creating Movies
+===============
+
+You can create animated movies showing the detector operation using the
+``make_movie.py`` script. This script will combine all the above steps in the
+detection process and will generate a movie file showing the original input
+movie that is being analyzed, facial landmarks, the light normalization result
+and the resulting score evolution, together with instantaneous eye-blink
+thresholds. You can use it to debug the eye-blinking detector and better tune
+the parameters for batch processing. The script takes the full path to a movie
+file in the REPLAY-ATTACK database and an output movie filename::
+
+  $ ./bin/make_movie.py database/train/attack/hand/attack_print_client001_session01_highdef_photo_controlled.mov test.avi
+
+You can use many of the tweaking options defined in the batch processing
+scripts to fine tune the output behavior. Use ``--help`` to find-out more
+information about this program.
 
 Problems
 --------

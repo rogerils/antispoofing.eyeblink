@@ -81,12 +81,14 @@ def main():
       counter += 1
       fname = obj.make_path(args.inputdir, '.hdf5')
 
-      if args.verbose: 
-        print "Processing file %s [%d/%d]..." % (fname, counter, total)
-
       arr = bob.io.load(fname)
 
       nb = utils.count_blinks(arr[:args.end], args.thres_ratio, args.skip)
+      
+      if args.verbose:
+        print "Processed file %s [%d/%d]... %d blinks" % \
+            (fname, counter, total, nb)
+
       positives.append(nb)
       
       out.write('%d %d %d %s %d\n' % (obj.client.id, obj.client.id, obj.client.id, obj.path, nb))
@@ -96,12 +98,14 @@ def main():
       counter += 1
       fname = obj.make_path(args.inputdir, '.hdf5')
 
-      if args.verbose: 
-        print "Processing file %s [%d/%d]..." % (fname, counter, total)
-
       arr = bob.io.load(fname)
 
       nb = utils.count_blinks(arr[:args.end], args.thres_ratio, args.skip)
+      
+      if args.verbose: 
+        print "Processed file %s [%d/%d]... %d blinks" % \
+            (fname, counter, total, nb)
+
       negatives.append(nb)
       
       out.write('%d %d attack %s %d\n' % (obj.client.id, obj.client.id, obj.path, nb))
@@ -124,7 +128,7 @@ def main():
     test_far, test_frr = bob.measure.farfrr(test_neg, test_pos, thres)
     test_hter = (test_far + test_frr)/2.0
 
-    print("Threshold = %d blink(s)" % nb)
+    print("Threshold - at least %d blink(s)" % nb)
     
     dev_ni = len(dev_neg) #number of impostors
     dev_fa = int(round(dev_far*dev_ni)) #number of false accepts

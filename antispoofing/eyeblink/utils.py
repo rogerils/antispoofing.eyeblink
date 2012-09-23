@@ -360,6 +360,9 @@ def score(data):
   2
     eye == 0
 
+  3
+    S < running_average(ratio(...))
+
   In these cases S is replaced by the output of running_average(ratio(...)).
   '''
 

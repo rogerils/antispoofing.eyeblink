@@ -90,8 +90,8 @@ def main():
 
     # start the work here...
     frames = [bob.ip.rgb_to_gray(k) for k in input]
-    utils.light_normalize_tantriggs(frames, annotations, 0, len(frames))
-    #utils.light_normalize_histogram(frames, annotations, 0, len(frames))
+    #utils.light_normalize_tantriggs(frames, annotations, 0, len(frames))
+    utils.light_normalize_histogram(frames, annotations, 0, len(frames))
     features = numpy.zeros((input.number_of_frames, 2), dtype='float64')
 
     for k in range(1, len(frames)):
