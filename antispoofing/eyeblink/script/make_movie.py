@@ -58,6 +58,12 @@ def main():
       help='Base path to the movie file you need plotting')
   parser.add_argument('output', metavar='FILE', type=str,
       help='Name of the output file to save the video')
+  parser.add_argument('-M', '--maximum-displacement', metavar='FLOAT',
+      type=float, dest="max_displacement", default=0.2, help="Maximum displacement (w.r.t. to the eye width) between eye-centers to consider the eye for calculating eye-differences")
+  parser.add_argument('-S', '--skip-frames', metavar='INT', type=int,
+      default=10, dest='skip', help="Number of frames to skip once an eye-blink has been detected (defaults to %(default)s)")
+  parser.add_argument('-T', '--threshold-ratio', metavar='FLOAT', type=float,
+      default=3.0, dest='thres_ratio', help="How many standard deviations to use for counting positive blink picks to %(default)s)")
 
   args = parser.parse_args()
 
@@ -80,71 +86,94 @@ def main():
   start = 0
   end = 225
 
-  # Loads the input vide
-  frames = video[start:end]
+  # Loads the input video
+  frames = [bob.ip.rgb_to_gray(k) for k in video[start:end]]
 
   # Recalculates the features
   annotations = utils.flandmark_load_annotations(obj, args.annotations,
       verbose=True)
-  prev = bob.ip.rgb_to_gray(frames[0])
-  curr = numpy.empty_like(prev)
+
+  # Light-normalizes detected faces
+  #utils.light_normalize_tantriggs(frames, annotations, start, end)
+  utils.light_normalize_histogram(frames, annotations, start, end)
+
   features = numpy.zeros((len(frames), 2), dtype='float64')
 
-  print "Computing features",
-  for k in range(start, end):
-    sys.stdout.write('.')
+  sys.stdout.write("Computing features ")
+  sys.stdout.flush()
+  for k in range(start+1, end):
+    curr_annot = annotations[k] if annotations.has_key(k) else None
+    prev_annot = annotations[k-1] if annotations.has_key(k-1) else None
+    use_annotation = (prev_annot, curr_annot)
+    use_frames = (frames[k-1], frames[k])
+
+    # maximum of 5 pixel displacement acceptable
+    eye_diff, eye_pixels = utils.eval_eyes_difference(use_frames, 
+        use_annotation, max_center_displacement=args.max_displacement)
+    facerem_diff, facerem_pixels = utils.eval_face_remainder_difference(
+        use_frames, use_annotation, eye_diff, eye_pixels)
+
+    if eye_pixels != 0: features[k][0] = eye_diff/float(eye_pixels)
+    else: features[k][0] = 0.
+
+    if facerem_pixels != 0: features[k][1] = facerem_diff/float(facerem_pixels)
+    else: features[k][1] = 1.
+
+    if eye_diff == 0: sys.stdout.write('x')
+    else: sys.stdout.write('.')
     sys.stdout.flush()
-    bob.ip.rgb_to_gray(frames[k], curr)
-    use_annotation = annotations[k] if annotations.has_key(k) else None
-    features[k][0] = utils.eval_eyes_difference(prev, curr, use_annotation)
-    features[k][1] = utils.eval_face_remainder_difference(prev, curr, use_annotation)
-    # swap buffers: curr <=> prev
-    tmp = prev
-    prev = curr
-    curr = tmp
+
+  scores = utils.score(features)
 
   sys.stdout.write('\n')
   sys.stdout.flush()
 
-  labels = ('eyes', 'rem.')
-  
   # plot N sequential images containing the video on the top and the advancing
   # graph of the features of choice on the bottom
   fig = mpl.figure()
-  sys.stdout.write("Writing %d frames" % (end-start))
+  sys.stdout.write("Writing %d frames " % (end-start))
   sys.stdout.flush()
 
   outv = None #output video place holder
   orows, ocolumns = None, None #the size of every frame in outv
-  gray = numpy.ndarray((video.height, video.width), dtype='uint8')
+  old_blinks = 0
   
-  for t in range(start,end):
+  for k in range(start,end):
 
     mpl.subplot(211)
-    mpl.title("Frame %05d" % t)
+    mpl.title("Frame %05d" % k)
 
     use_annotation = annotations[k] if annotations.has_key(k) else None
     
-    bob.ip.rgb_to_gray(frames[t-start], gray)
-
     if use_annotation:
       x, y, width, height = use_annotation['bbox']
-      bob.ip.draw_box(gray, x, y, width, height, 255)
+      bob.ip.draw_box(frames[k], x, y, width, height, 255)
       x, y, width, height = use_annotation['eyes'][0]
-      bob.ip.draw_box(gray, x, y, width, height, 255)
+      bob.ip.draw_box(frames[k], x, y, width, height, 255)
       x, y, width, height = use_annotation['eyes'][1]
-      bob.ip.draw_box(gray, x, y, width, height, 255)
+      bob.ip.draw_box(frames[k], x, y, width, height, 255)
       x, y, width, height = use_annotation['face_remainder']
-      bob.ip.draw_box(gray, x, y, width, height, 255)
+      bob.ip.draw_box(frames[k], x, y, width, height, 255)
 
-    mpl.imshow(gray, cmap=GrayColorMap) #top plot
+    mpl.imshow(frames[k], cmap=GrayColorMap) #top plot
 
     mpl.subplot(212)
 
-    mpl.plot(numpy.arange(start, t+1), features[start:(t+1),:], label=labels)
-    mpl.axis((start, end, features.min(), features.max()))
+    score_set = scores[start:k+1]
+    blinks = utils.count_blinks(score_set, args.thres_ratio, args.skip)
+    rmean = utils.rmean(score_set)[-1]
+    rstd = utils.rstd(score_set)[-1]
+    threshold = (args.thres_ratio * rstd) + rmean
+
+    mpl.plot(numpy.arange(start, k+1), score_set, linewidth=2, label='score')
+    mpl.hlines(rmean, start, end, color='red', 
+        linestyles='dashed', alpha=0.8, label='mean')
+    mpl.hlines(threshold, start, end, color='red', 
+        linestyles='solid', alpha=0.8, label='threshold')
+    yrange = scores.max() - scores.min()
+    mpl.axis((start, end, scores.min(), (0.2*yrange) + scores.max()))
     mpl.grid(True)
-    mpl.xlabel("Frames")
+    mpl.xlabel("Frames | Blinks = %d" % blinks)
     mpl.ylabel("Magnitude")
 
     figure = fig2array(fig)
@@ -156,7 +185,11 @@ def main():
 
     outv.append(figure[:,0:orows,0:ocolumns])
     mpl.clf()
-    sys.stdout.write('.')
+    if blinks != old_blinks:
+      old_blinks = blinks
+      sys.stdout.write('%d' % old_blinks)
+    else:
+      sys.stdout.write('.')
     sys.stdout.flush()
 
   sys.stdout.write('\n')

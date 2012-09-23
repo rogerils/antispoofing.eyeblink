@@ -19,8 +19,9 @@ def main():
   """Main method"""
   
   from xbob.db.replay import Database
+  from .. import utils
 
-  protocols = Database().protocols()
+  protocols = [k.name for k in Database().protos()]
 
   parser = argparse.ArgumentParser(description=__doc__,
       formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -40,10 +41,10 @@ def main():
       default=220, dest='end', help="Number of scores to merge from every file (defaults to %(default)s)")
 
   parser.add_argument('-S', '--skip-frames', metavar='INT', type=int,
-      default=5, dest='skip', help="Number of frames to skip once an eye-blink has been detected (defaults to %(default)s)")
+      default=10, dest='skip', help="Number of frames to skip once an eye-blink has been detected (defaults to %(default)s)")
 
   parser.add_argument('-T', '--threshold-ratio', metavar='FLOAT', type=float,
-      default=0.5, dest='thres_ratio', help="Ratio between the maximum score average and the score average used to calculate the blink detection threshold on (defaults to %(default)s)")
+      default=3.0, dest='thres_ratio', help="How many standard deviations to use for counting positive blink picks to %(default)s)")
 
   parser.add_argument('-v', '--verbose', action='store_true', dest='verbose',
       default=False, help='Increases this script verbosity')
@@ -61,116 +62,84 @@ def main():
 
   db = Database()
 
-  def eval_blink_threshold():
-    """Evaluates the blink threshold using enrollment data for each client"""
-
-    client_models = {}
-
-    for client in db.clients():
-      avg = []
-      max = []
-      
-      data = db.files(directory=args.inputdir, cls='enroll', clients=client,
-          extension='.hdf5')
-
-      for key, value in data.iteritems():
-        scores = bob.io.load(value)
-        avg.append(numpy.mean(scores))
-        max.append(numpy.max(scores))
-
-      avg = numpy.mean(avg)
-      max = numpy.mean(max)
-
-      # user configurable ratio between the average and the maximum
-      client_models[client] = args.thres_ratio*(max - avg) + avg
-
-      if args.verbose:
-        print "Blink threshold for client %d set to %.5e" % \
-            (client, client_models[client])
-        print "  * Average = %.5e" % avg
-        print "  * Maximum = %.5e" % max
-
-    return client_models
-
-  def count_blinks(scores, threshold, skip_frames):
-    """Tells the client has blinked
-    
-    Keyword arguments
-
-    scores
-      The score set to be analyzed
-
-    threshold
-      The threshold to be used for checking blinks
-
-    skip_frames
-      How many frames to skip before start eye-blink detection again (after an
-      eye-blink has been successfuly detected). This is required to avoid the
-      method to falsely detect positives following a successful detection.
-    """
-
-    detected = 0
-    skip = skip_frames #start by skipping the initial frames
-
-    for score in scores:
-      if skip:
-        skip -= 1
-        continue
-
-      if score >= threshold:
-        detected += 1
-        skip = skip_frames
-
-    return detected
-
-  def write_file(group, threshold):
+  def write_file(group):
 
     if args.verbose:
       print "Processing '%s' group..." % group
   
     out = open(os.path.join(args.outputdir, '%s-5col.txt' % group), 'wt')
 
-    reals = db.files(protocol=args.protocol, support=args.support,
+    reals = db.objects(protocol=args.protocol, support=args.support,
         groups=(group,), cls=('real',))
-    attacks = db.files(protocol=args.protocol, support=args.support,
+    attacks = db.objects(protocol=args.protocol, support=args.support,
         groups=(group,), cls=('attack',))
     total = len(reals) + len(attacks)
 
     counter = 0
-    for key, value in reals.iteritems():
+    positives = []
+    for obj in reals:
       counter += 1
-      fname = os.path.join(args.inputdir, value + '.hdf5')
+      fname = obj.make_path(args.inputdir, '.hdf5')
 
       if args.verbose: 
         print "Processing file %s [%d/%d]..." % (fname, counter, total)
 
-      client = db.info((key,))[0]['client']
-
       arr = bob.io.load(fname)
 
-      nb = count_blinks(arr[:args.end], threshold[client], 
-          skip_frames=args.skip)
+      nb = utils.count_blinks(arr[:args.end], args.thres_ratio, args.skip)
+      positives.append(nb)
       
-      out.write('%d %d %d %s %d\n' % (client, client, client, value, nb))
+      out.write('%d %d %d %s %d\n' % (obj.client.id, obj.client.id, obj.client.id, obj.path, nb))
 
-    for key, value in attacks.iteritems():
+    negatives = []
+    for obj in attacks:
       counter += 1
-      fname = os.path.join(args.inputdir, value + '.hdf5')
+      fname = obj.make_path(args.inputdir, '.hdf5')
 
       if args.verbose: 
         print "Processing file %s [%d/%d]..." % (fname, counter, total)
 
-      client = db.info((key,))[0]['client']
-
       arr = bob.io.load(fname)
-      nb = count_blinks(arr[:args.end], threshold[client], 
-          skip_frames=args.skip)
+
+      nb = utils.count_blinks(arr[:args.end], args.thres_ratio, args.skip)
+      negatives.append(nb)
       
-      out.write('%d %d attack %s %d\n' % (client, client, value, nb))
+      out.write('%d %d attack %s %d\n' % (obj.client.id, obj.client.id, obj.path, nb))
 
     out.close()
 
-  threshold = eval_blink_threshold()
-  write_file('train', threshold)
-  write_file('devel', threshold)
-  write_file('test', threshold)
+    return negatives, positives
+
+  train_neg, train_pos = write_file('train')
+  dev_neg, dev_pos = write_file('devel')
+  test_neg, test_pos = write_file('test')
+
+  def eval(nb):
+
+    thres = nb - 0.5
+
+    dev_far, dev_frr = bob.measure.farfrr(dev_neg, dev_pos, thres)
+    dev_hter = (dev_far + dev_frr)/2.0
+
+    test_far, test_frr = bob.measure.farfrr(test_neg, test_pos, thres)
+    test_hter = (test_far + test_frr)/2.0
+
+    print("Threshold = %d blink(s)" % nb)
+    
+    dev_ni = len(dev_neg) #number of impostors
+    dev_fa = int(round(dev_far*dev_ni)) #number of false accepts
+    dev_nc = len(dev_pos) #number of clients
+    dev_fr = int(round(dev_frr*dev_nc)) #number of false rejects
+    test_ni = len(test_neg) #number of impostors
+    test_fa = int(round(test_far*test_ni)) #number of false accepts
+    test_nc = len(test_pos) #number of clients
+    test_fr = int(round(test_frr*test_nc)) #number of false rejects
+
+    print " Error (devel): FAR %.2f%% (%d/%d) x FRR %.2f%% (%d/%d) = HTER %.2f%%" % \
+        (100*dev_far, dev_fa, dev_ni, 100*dev_frr, dev_fr, dev_nc, 100*dev_hter)
+    print " Error (test ): FAR %.2f%% (%d/%d) x FRR %.2f%% (%d/%d) = HTER %.2f%%" % \
+        (100*test_far, test_fa, test_ni, 100*test_frr, test_fr, test_nc, 100*test_hter)
+
+  eval(1)
+  eval(2)
+  eval(3)

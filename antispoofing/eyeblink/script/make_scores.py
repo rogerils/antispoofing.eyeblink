@@ -12,31 +12,13 @@ import sys
 import bob
 import numpy
 import argparse
-
-def rmean(arr):
-  """Calculates the running mean in a 1D numpy array"""
-  return numpy.array([numpy.mean(arr[:(k+1)]) for k in range(len(arr))])
-
-def score(data, average):
-  '''Calculates the score in any given input frame.
-  
-  S = ratio(eye/face_rem) - 2 * running_average(ratio(eye/face_rem))
-  '''
-
-  def replace_nan(nparr):
-    """If the value is close to zero, set it to a default"""
-    nparr[numpy.isnan(nparr)] = 0
-    return nparr
-
-  norm = replace_nan(data[:,0]/data[:,1])
-  #return norm - (2 * rmean(norm))
-  return norm - average
+from ..utils import score
 
 def main():
   """Main method"""
   
   from xbob.db.replay import Database
-  protocols = Database().protocols()
+  protocols = [k.name for k in Database().protos()]
 
   basedir = os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0])))
 
@@ -72,40 +54,20 @@ def main():
 
   db = Database()
 
-  # evaluates averages:
-  averages = {}
-  for client in db.clients():
-    data = db.files(directory=args.inputdir, cls='enroll', clients=client,
-        extension='.hdf5')
-
-    partial = []
-    for key, value in data.iteritems():
-      scores = bob.io.load(value)
-      partial.append(numpy.mean(scores))
-    averages[client] = numpy.mean(partial)
-    if args.verbose:
-      sys.stdout.write('Average for client %d is %.5e\n' % (client,
-        averages[client]))
-      sys.stdout.flush()
-
-  process = db.files(args.inputdir, extension='.hdf5', 
-      protocol=args.protocol, support=args.support,
+  process = db.objects(protocol=args.protocol, support=args.support,
       cls=('real', 'attack', 'enroll'))
 
   counter = 0
-  for key, filename in process.items():
+  for obj in process:
     counter += 1
      
-    filename = os.path.expanduser(filename)
+    filename = os.path.expanduser(obj.make_path(args.inputdir, '.hdf5'))
     
     if args.verbose: sys.stdout.write("Processing file %s [%d/%d] " % (filename, counter, len(process)))
 
     input = bob.io.load(filename)
 
-    info = db.info((key,))[0]
-
-    db.save_one(key, score(input, averages[info['client']]), 
-        directory=args.outputdir, extension='.hdf5')
+    obj.save(score(input), directory=args.outputdir, extension='.hdf5')
 
     if args.verbose:
       sys.stdout.write('Saving results to "%s"...\n' % args.outputdir)
