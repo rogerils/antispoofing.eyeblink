@@ -18,7 +18,7 @@ def main():
   """Main method"""
   
   from xbob.db.replay import Database
-  protocols = [k.name for k in Database().protos()]
+  protocols = [k.name for k in Database().protocols()]
 
   basedir = os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0])))
 

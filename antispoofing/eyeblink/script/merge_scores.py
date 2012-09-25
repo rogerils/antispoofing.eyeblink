@@ -21,7 +21,7 @@ def main():
   from xbob.db.replay import Database
   from .. import utils
 
-  protocols = [k.name for k in Database().protos()]
+  protocols = [k.name for k in Database().protocols()]
 
   parser = argparse.ArgumentParser(description=__doc__,
       formatter_class=argparse.RawDescriptionHelpFormatter)
