@@ -25,7 +25,7 @@ def main():
 
   parser = argparse.ArgumentParser(description=__doc__,
       formatter_class=argparse.RawDescriptionHelpFormatter)
-  parser.add_argument('inputdir', metavar='DIR', type=str, help='Base directory containing the scores to be loaded and merged')
+  parser.add_argument('inputdir', metavar='DIR', type=str, help='Base directory containing the eye-blinks to be merged')
   parser.add_argument('outputdir', metavar='DIR', type=str, help='Base output directory for every file created by this procedure')
   
   parser.add_argument('-p', '--protocol', metavar='PROTOCOL', type=str,
@@ -39,12 +39,6 @@ def main():
 
   parser.add_argument('-n', '--number-of-scores', metavar='INT', type=int,
       default=220, dest='end', help="Number of scores to merge from every file (defaults to %(default)s)")
-
-  parser.add_argument('-S', '--skip-frames', metavar='INT', type=int,
-      default=10, dest='skip', help="Number of frames to skip once an eye-blink has been detected (defaults to %(default)s)")
-
-  parser.add_argument('-T', '--threshold-ratio', metavar='FLOAT', type=float,
-      default=3.0, dest='thres_ratio', help="How many standard deviations to use for counting positive blink picks to %(default)s)")
 
   parser.add_argument('-v', '--verbose', action='store_true', dest='verbose',
       default=False, help='Increases this script verbosity')
@@ -77,40 +71,46 @@ def main():
 
     counter = 0
     positives = []
+    if args.verbose:
+      sys.stdout.write(' * real-accesses[%d]: ' % (args.end-1))
+      sys.stdout.flush()
     for obj in reals:
       counter += 1
       fname = obj.make_path(args.inputdir, '.hdf5')
 
-      arr = bob.io.load(fname)
+      nb = bob.io.load(fname)[args.end-1]
 
-      nb = utils.count_blinks(arr[:args.end], args.thres_ratio, args.skip)
-      
       if args.verbose:
-        print "Processed file %s [%d/%d]... %d blinks" % \
-            (fname, counter, total, nb)
+        sys.stdout.write('%d ' % nb)
+        sys.stdout.flush()
 
       positives.append(nb)
       
-      out.write('%d %d %d %s %d\n' % (obj.client.id, obj.client.id, obj.client.id, obj.path, nb))
+      out.write('%d %d %d %s %d.0\n' % (obj.client.id, obj.client.id, obj.client.id, obj.path, nb))
 
     negatives = []
+    if args.verbose:
+      sys.stdout.write('\n * attacks[%d]: ' % (args.end-1))
+      sys.stdout.flush()
     for obj in attacks:
       counter += 1
       fname = obj.make_path(args.inputdir, '.hdf5')
 
-      arr = bob.io.load(fname)
+      nb = bob.io.load(fname)[args.end-1]
 
-      nb = utils.count_blinks(arr[:args.end], args.thres_ratio, args.skip)
-      
-      if args.verbose: 
-        print "Processed file %s [%d/%d]... %d blinks" % \
-            (fname, counter, total, nb)
+      if args.verbose:
+        sys.stdout.write('%d ' % nb)
+        sys.stdout.flush()
 
       negatives.append(nb)
       
-      out.write('%d %d attack %s %d\n' % (obj.client.id, obj.client.id, obj.path, nb))
+      out.write('%d %d attack %s %d.0\n' % (obj.client.id, obj.client.id, obj.path, nb))
 
     out.close()
+      
+    if args.verbose:
+      sys.stdout.write('\n')
+      sys.stdout.flush()
 
     return negatives, positives
 

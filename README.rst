@@ -177,7 +177,7 @@ the eye region). In the first stage of the processing, we compute the eye
 and face remainder regions normalized frame differences for each input video.
 To do this, just execute::
 
-  $ ./bin/framediff.py /root/of/database results/framediff
+  $ ./bin/framediff.py /root/of/database /root/of/annotations results/framediff
 
 There are more options for the `framediff.py` script you can use (such as the
 sub-protocol selection). Note that, by default, all applications are tunned to
@@ -196,7 +196,7 @@ discarded.
 
   To parallelize this job, do the following::
 
-    $ ./bin/jman submit --array=1300 ./bin/framediff.py /root/of/database results/framediff --grid
+    $ ./bin/jman submit --array=1300 ./bin/framediff.py /root/of/database /root/of/annotations results/framediff
 
   The `magic` number of `1300` entries can be found by executing::
 
@@ -204,8 +204,8 @@ discarded.
 
   Which just prints the number of jobs it requires for the grid execution.
 
-Creating Final Score Files
-==========================
+Creating Partial Score Files
+============================
 
 To create the final score files, you will need to execute ``make_scores.py``,
 which contains a simple strategy for producing a single score per input frame
@@ -230,7 +230,7 @@ remainder frame differences in the following way::
 To compute the scores ``S`` for every frame in every input video, do the
 following::
 
-  $ ./bin/make_scores.py --verbose results/framediff results/scores
+  $ ./bin/make_scores.py --verbose results/framediff results/partial_scores
 
 There are more options for the `framediff.py` script you can use (such as the
 sub-protocol selection). Note that, by default, all applications are tunned to
@@ -240,15 +240,28 @@ the command line for instructions.
 We don't provide a grid-ified version of this step because the job runs quite
 fast, even for the whole database.
 
-Merging Scores - Counting Eye-Blinks
-====================================
+Counting Eye-Blinks
+===================
+
+The next step of the process is to use the partial scores for each video (a
+signal through time) to count the number of blinks perceived in every database
+element. You can use the ``count_blinks.py`` script for that::
+
+  $ ./bin/count_blinks.py --verbose results/partial_scores results/blinks
+
+The output files will have integer values as scores for each frame, with the
+number of blinks accounted up to that point in time. These files can be used as
+score output files for fusion processes.
+
+Merging Scores
+==============
 
 If you wish to create a single `5-column format file
 <http://www.idiap.ch/software/bob/docs/nightlies/last/bob/sphinx/html/measure/index.html?highlight=five_col#bob.measure.load.five_column>`_
 by combining this counter-measure scores for every video into a single file
 that can be fed to external analysis utilities such as our
 `antispoofing.evaluation <http://pypi.python.org/pypi/antispoofing.evaluation>`
-package, you should use the script ``merge_scores.py``. The merged scores
+package, you should use the script ``count_blinks.py``. The merged scores
 represent the number of eye-blinks computed for each video sequence. You will
 have to specify how many of the scores in every video you will want to consider
 and the input directory containing the scores files that will be merged (by
@@ -262,7 +275,7 @@ in the output file corresponds to a video from the database.
 You run this program on the output of ``make_scores.py``. So, it should look
 like this if you followed the previous example::
 
-  $ ./bin/merge_scores.py --verbose results/scores results
+  $ ./bin/merge_scores.py --verbose results/partial_scores results/blinks
 
 The above commandline example will generate 3 text files on the ``results``
 directory containing the training, development and test scores, accumulated

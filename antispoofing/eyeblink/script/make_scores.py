@@ -61,11 +61,10 @@ def main():
   for obj in process:
     counter += 1
      
-    filename = os.path.expanduser(obj.make_path(args.inputdir, '.hdf5'))
-    
-    if args.verbose: sys.stdout.write("Processing file %s [%d/%d] " % (filename, counter, len(process)))
+    if args.verbose: 
+      sys.stdout.write("Processing file %s [%d/%d] " % (obj.path, counter, len(process)))
 
-    input = bob.io.load(filename)
+    input = obj.load(args.inputdir, '.hdf5')
 
     obj.save(score(input), directory=args.outputdir, extension='.hdf5')
 

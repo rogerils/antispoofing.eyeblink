@@ -37,19 +37,13 @@ def main():
       default='grandtest', choices=protocols, dest="protocol",
       help='The protocol type may be specified instead of the the id switch to subselect a smaller number of files to operate on (one of "%s"; defaults to "%%(default)s")' % '|'.join(sorted(protocols)))
   parser.add_argument('-M', '--maximum-displacement', metavar='FLOAT',
-      type=float, dest="max_displacement", default=0.2, help="Maximum displacement (w.r.t. to the eye width) between eye-centers to consider the eye for calculating eye-differences")
+      type=float, dest="max_displacement", default=0.2, help="Maximum displacement (w.r.t. to the eye width) between eye-centers to consider the eye for calculating eye-differences (defaults to %(default)s)")
 
   supports = ('fixed', 'hand', 'hand+fixed')
 
   parser.add_argument('-s', '--support', metavar='SUPPORT', type=str,
       default='hand+fixed', dest='support', choices=supports, help="If you would like to select a specific support to be used, use this option (one of '%s'; defaults to '%%(default)s')" % '|'.join(sorted(supports)))
 
-  # If set, assumes it is being run using a parametric grid job. It orders all
-  # ids to be processed and picks the one at the position given by
-  # ${SGE_TASK_ID}-1'). To avoid user confusion, this option is suppressed
-  # from the --help menu
-  parser.add_argument('--grid', dest='grid', action='store_true',
-      default=False, help=argparse.SUPPRESS)
   # The next option just returns the total number of cases we will be running
   # It can be used to set jman --array option.
   parser.add_argument('--grid-count', dest='grid_count', action='store_true',
@@ -71,7 +65,7 @@ def main():
     sys.exit(0)
 
   # if we are on a grid environment, just find what I have to process.
-  if args.grid:
+  if os.environ.has_key('SGE_TASK_ID'):
     key = int(os.environ['SGE_TASK_ID']) - 1
     if key >= len(process):
       raise RuntimeError, "Grid request for job %d on a setup with %d jobs" % \
@@ -92,7 +86,9 @@ def main():
     frames = [bob.ip.rgb_to_gray(k) for k in input]
     #utils.light_normalize_tantriggs(frames, annotations, 0, len(frames))
     utils.light_normalize_histogram(frames, annotations, 0, len(frames))
-    features = numpy.zeros((input.number_of_frames, 2), dtype='float64')
+
+    features = numpy.ndarray((input.number_of_frames, 2), dtype='float64')
+    features[:] = numpy.NaN
 
     for k in range(1, len(frames)):
 
@@ -108,12 +104,12 @@ def main():
       facerem_diff, facerem_pixels = utils.eval_face_remainder_difference(
           use_frames, use_annotation, eye_diff, eye_pixels)
 
-      if eye_pixels != 0: 
+      if eye_pixels != 0:
         features[k][0] = eye_diff/float(eye_pixels)
       else: 
         features[k][0] = 0.
 
-      if facerem_pixels != 0: 
+      if facerem_pixels != 0:
         features[k][1] = facerem_diff/float(facerem_pixels)
       else: 
         features[k][1] = 1.
@@ -128,6 +124,3 @@ def main():
     sys.stdout.flush()
 
   return 0
-
-if __name__ == "__main__":
-  main()

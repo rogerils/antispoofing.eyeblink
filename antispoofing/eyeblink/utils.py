@@ -406,14 +406,18 @@ def count_blinks(scores, std_thres, skip_frames):
   skip = skip_frames #start by skipping the initial frames
   rm = rmean(scores)
   rs = rstd(scores)
+  retval = numpy.ndarray((len(scores),), dtype='float64')
 
   for k, score in enumerate(scores):
     if skip:
       skip -= 1
+      retval[k] = detected
       continue
 
     if (score-rm[k]) >= (std_thres * rs[k]):
       detected += 1
       skip = skip_frames
 
-  return detected
+    retval[k] = detected
+
+  return retval

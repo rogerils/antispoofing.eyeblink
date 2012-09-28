@@ -38,6 +38,7 @@ setup(
       'console_scripts': [
         'framediff.py = antispoofing.eyeblink.script.framediff:main',
         'make_scores.py = antispoofing.eyeblink.script.make_scores:main',
+        'count_blinks.py = antispoofing.eyeblink.script.count_blinks:main',
         'merge_scores.py = antispoofing.eyeblink.script.merge_scores:main',
         'make_movie.py = antispoofing.eyeblink.script.make_movie:main',
         ],
