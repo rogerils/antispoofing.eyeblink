@@ -173,7 +173,7 @@ def main():
     yrange = scores.max() - scores.min()
     mpl.axis((start, end, scores.min(), (0.2*yrange) + scores.max()))
     mpl.grid(True)
-    mpl.xlabel("Frames | Blinks = %d" % blinks)
+    mpl.xlabel("Frames | Blinks = %d" % blinks[-1])
     mpl.ylabel("Magnitude")
 
     figure = fig2array(fig)
@@ -185,8 +185,8 @@ def main():
 
     outv.append(figure[:,0:orows,0:ocolumns])
     mpl.clf()
-    if blinks != old_blinks:
-      old_blinks = blinks
+    if blinks[-1] != old_blinks:
+      old_blinks = blinks[-1]
       sys.stdout.write('%d' % old_blinks)
     else:
       sys.stdout.write('.')

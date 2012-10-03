@@ -10,7 +10,7 @@ from setuptools import setup, find_packages
 setup(
 
     name='antispoofing.eyeblink',
-    version='1.0.0',
+    version='1.0.1',
     description='Eye-blinking counter-measures for the REPLAY-ATTACK database',
     url='http://pypi.python.org/pypi/antispoofing.eyeblink',
     license='GPLv3',
